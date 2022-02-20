@@ -102,7 +102,7 @@
         <button
             @click="sel = null"
             type="button"
-            class="absolute top-0 right-0"
+            class="absolute top-0 right-0 mt"
         >
           <svg
               xmlns="http://www.w3.org/2000/svg"
@@ -185,5 +185,3 @@ export default {
 };
 
 </script>
-
-<style src="./app.css"></style>
