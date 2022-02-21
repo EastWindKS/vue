@@ -1,7 +1,16 @@
 <template>
   <div class="container mx-auto flex flex-col items-center bg-gray-100 p-4">
+    <div v-if="isLoading"
+         class="fixed w-100 h-100 opacity-80 bg-purple-800 inset-0 z-50 flex items-center justify-center">
+      <svg class="animate-spin -ml-1 mr-3 h-12 w-12 text-white" xmlns="http://www.w3.org/2000/svg" fill="none"
+           viewBox="0 0 24 24">
+        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+        <path class="opacity-75" fill="currentColor"
+              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+      </svg>
+    </div>
+
     <div class="container">
-      <div class="w-full my-4"></div>
       <section>
         <div class="flex">
           <div class="max-w-xs">
@@ -12,6 +21,7 @@
               <input
                   @keydown.enter="addTicker"
                   v-model="ticker"
+                  @input="onChangeTicker"
                   type="text"
                   name="wallet"
                   id="wallet"
@@ -19,6 +29,17 @@
                   placeholder="Например DOGE"
               />
             </div>
+            <div class="flex bg-white shadow-md p-1 rounded-md shadow-md flex-wrap" v-show="coinsListToShow.length > 0">
+            <span
+                v-for="coin in coinsListToShow"
+                :key="coin.Id"
+                @click="onHelpClick(coin)"
+                class="inline-flex items-center px-2 m-1 rounded-md text-xs font-medium bg-gray-300 text-gray-800 cursor-pointer">
+              {{ coin.Symbol }}
+            </span>
+            </div>
+            <div v-show="isTickerIn" class="text-sm text-red-600">Такой тикер уже добавлен</div>
+
           </div>
         </div>
         <button
@@ -130,27 +151,33 @@
 </template>
 
 <script>
-import {getDataByName} from "./api";
+import {getDataByName, getCoinsList} from "./api";
 
 export default {
   name: "App",
-
   data() {
     return {
       ticker: "",
+      isTickerIn: false,
+      isLoading: true,
       tickers: [],
       sel: null,
-      graph: []
+      graph: [],
+      coinsList: [],
+      coinsListToShow: []
     };
   },
   methods: {
     async addTicker() {
       let currentTicker = {
-        name: this.ticker,
+        name: this.ticker.toUpperCase(),
         price: "-"
       };
 
-      this.ticker = "";
+      if (this.tickers.find(t => t.name === currentTicker.name) !== undefined) {
+        this.isTickerIn = true;
+        return;
+      }
 
       this.tickers.push(currentTicker);
       setInterval(async () => {
@@ -162,6 +189,9 @@ export default {
         }
 
       }, 3000);
+
+      this.ticker = "";
+      this.coinsListToShow = [];
     },
 
     removeTicker(ticker) {
@@ -179,8 +209,33 @@ export default {
       return this.graph.map(
           price => 5 + ((price - minValue) * 95) / (maxValue - minValue)
       );
-    }
+    },
 
+    onHelpClick(coin) {
+      this.ticker = coin.Symbol;
+      this.addTicker();
+    },
+
+    onChangeTicker() {
+      this.coinsListToShow = [];
+      this.isTickerIn = false;
+      this.coinsList.forEach(f => {
+        if (this.coinsListToShow.length < 4 && this.ticker.length > 0 && f.Symbol.includes(this.ticker.toUpperCase())) {
+          this.coinsListToShow.push(f);
+        }
+      });
+
+    },
+
+    async fetchCoinsList() {
+      this.coinsList = await getCoinsList().then(r => {
+        this.isLoading = false;
+        return Object.values(r.Data);
+      });
+    }
+  },
+  created() {
+    this.fetchCoinsList();
   }
 };
 
