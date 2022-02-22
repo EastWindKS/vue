@@ -82,7 +82,7 @@
         <hr class="w-full border-t border-gray-600 my-4"/>
         <dl class="mt-5 grid grid-cols-1 gap-5 sm:grid-cols-3">
           <div
-              v-for="(t,index) in filteredTickers()"
+              v-for="(t,index) in paginatedTickers"
               :key="index"
               :class="{
                 'border-4': sel === t
@@ -130,7 +130,7 @@
         </h3>
         <div class="flex items-end border-gray-600 border-b border-l h-64">
           <div
-              v-for="(g,index) in normalizeGraph()"
+              v-for="(g,index) in normalizedGraph"
               :key="index"
               :style="{ height: `${g}%` }"
               class="bg-purple-800 border w-10 h-24"/>
@@ -147,7 +147,6 @@
               x="0"
               y="0"
               viewBox="0 0 511.76 511.76"
-              style="enable-background:new 0 0 512 512"
               xml:space="preserve"
           >
 
@@ -177,7 +176,6 @@ export default {
       pageNumber: 1,
       isTickerIn: false,
       isLoading: true,
-      hasNextPage: false,
       tickers: [],
       sel: null,
       graph: [],
@@ -187,15 +185,17 @@ export default {
   },
   methods: {
     async addTicker() {
-      let currentTicker = {
+      const currentTicker = {
         name: this.ticker.toUpperCase(),
         price: "-"
       };
-      if (this.tickers.find(t => t.name === currentTicker.name) !== undefined) {
+
+      if (this.tickers.find(t => t.name === currentTicker.name)) {
         this.isTickerIn = true;
         return;
       }
-      this.tickers.push(currentTicker);
+
+      this.tickers = [...this.tickers, currentTicker];
       this.subscribeOnTickerInformation(currentTicker.name);
       this.ticker = "";
       this.coinsListToShow = [];
@@ -209,13 +209,7 @@ export default {
       this.sel = ticker;
       this.graph = [];
     },
-    normalizeGraph() {
-      const maxValue = Math.max(...this.graph);
-      const minValue = Math.min(...this.graph);
-      return this.graph.map(
-          price => 5 + ((price - minValue) * 95) / (maxValue - minValue)
-      );
-    },
+
     onHelpClick(coin) {
       this.ticker = coin.Symbol;
       this.addTicker();
@@ -249,21 +243,52 @@ export default {
         this.isLoading = false;
         return Object.values(r.Data);
       });
+    }
+  },
+
+  computed: {
+    startIndex() {
+      return (this.pageNumber - 1) * 6;
+    },
+
+    endIndex() {
+      return this.pageNumber * 6;
     },
 
     filteredTickers() {
-      const start = (this.pageNumber - 1) * 6;
-      const end = this.pageNumber * 6;
-      const filteredTickers = this.tickers.filter(t => t.name.includes(this.filter.toUpperCase()));
-      this.hasNextPage = filteredTickers.length > end;
-
-      return filteredTickers.slice(start, end);
+      return this.tickers.filter(ticker => ticker.name.includes(this.filter));
     },
+
+    paginatedTickers() {
+      return this.filteredTickers.slice(this.startIndex, this.endIndex);
+    },
+
+    hasNextPage() {
+      return this.filteredTickers.length > this.endIndex;
+    },
+
+    normalizedGraph() {
+      const maxValue = Math.max(...this.graph);
+      const minValue = Math.min(...this.graph);
+
+      if (maxValue === minValue) {
+        return this.graph.map(() => 50);
+      }
+
+      return this.graph.map(
+          price => 5 + ((price - minValue) * 95) / (maxValue - minValue)
+      );
+    },
+
   },
 
   watch: {
     filter() {
       this.pageNumber = 1;
+      history.pushState(null, document.title, `${window.location.pathname}?filter=${this.filter}&page${this.pageNumber}`);
+    },
+
+    page() {
       history.pushState(null, document.title, `${window.location.pathname}?filter=${this.filter}&page${this.pageNumber}`);
     }
   },
@@ -289,3 +314,15 @@ export default {
   }
 };
 </script>
+
+<!--TODO:-->
+<!--1. Одинаковый код в watch-->
+<!--2. При удалении остается подписка на загрузку тикер-->
+<!--3. Количество запросов-->
+<!--4. Запросы напрямую внутри компонентов (??)-->
+<!--5. Обработка ошибок АПИ-->
+<!--6. Наличие в состоянии зависимых данных-->
+<!--7. График ужасно выглядит если будет много цен-->
+<!--8. При удалении тикера не изменяется локалсторадж (я вроде бы фиксил уже)-->
+<!--9. ЛокалСторадж в анонимных вкладках (Может быть не доступен)-->
+<!--10. Магические строки и числа (URL, секунды задержки, ключ локал стораджа, количество на странице)-->
