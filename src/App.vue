@@ -66,14 +66,14 @@
         <hr class="w-full border-t border-gray-600 my-4"/>
         <div>
           <button
-              v-show="pageNumber > 1"
-              @click="pageNumber--"
+              v-show="page > 1"
+              @click="page--"
               class="my-4 mx-2 inline-flex items-center py-2 px-4 border border-transparent shadow-sm text-sm leading-4 font-medium rounded-full text-white bg-gray-600 hover:bg-gray-700 transition-colors duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500">
             Назад
           </button>
           <button
               v-show="hasNextPage"
-              @click="pageNumber++"
+              @click="page++"
               class="my-4 mx-2 inline-flex items-center py-2 px-4 border border-transparent shadow-sm text-sm leading-4 font-medium rounded-full text-white bg-gray-600 hover:bg-gray-700 transition-colors duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500">
             Вперед
           </button>
@@ -85,7 +85,7 @@
               v-for="(t,index) in paginatedTickers"
               :key="index"
               :class="{
-                'border-4': sel === t
+                'border-4': selectedTicker === t
               }"
               @click="select(t)"
               class="bg-white overflow-hidden shadow rounded-lg border-purple-800 border-solid cursor-pointer"
@@ -124,9 +124,9 @@
         </dl>
         <hr class="w-full border-t border-gray-600 my-4"/>
       </template>
-      <section v-if="sel" class="relative">
+      <section v-if="selectedTicker" class="relative">
         <h3 class="text-lg leading-6 font-medium text-gray-900 my-8">
-          {{ sel.name }} - USD
+          {{ selectedTicker.name }} - USD
         </h3>
         <div class="flex items-end border-gray-600 border-b border-l h-64">
           <div
@@ -136,7 +136,7 @@
               class="bg-purple-800 border w-10 h-24"/>
         </div>
         <button
-            @click="sel = null"
+            @click="selectedTicker = null"
             type="button"
             class="absolute top-0 right-0 mt"
         >
@@ -173,11 +173,11 @@ export default {
     return {
       ticker: "",
       filter: "",
-      pageNumber: 1,
+      page: 1,
       isTickerIn: false,
       isLoading: true,
       tickers: [],
-      sel: null,
+      selectedTicker: null,
       graph: [],
       coinsList: [],
       coinsListToShow: []
@@ -199,15 +199,17 @@ export default {
       this.subscribeOnTickerInformation(currentTicker.name);
       this.ticker = "";
       this.coinsListToShow = [];
-      this.writeTickersToLocalStorage();
     },
     removeTicker(ticker) {
       this.tickers = this.tickers.filter(t => t !== ticker);
-      this.writeTickersToLocalStorage();
+
+      if (ticker === this.selectedTicker) {
+        this.selectedTicker = null;
+      }
+
     },
     select(ticker) {
-      this.sel = ticker;
-      this.graph = [];
+      this.selectedTicker = ticker;
     },
 
     onHelpClick(coin) {
@@ -224,15 +226,11 @@ export default {
       });
     },
 
-    writeTickersToLocalStorage() {
-      localStorage.setItem("tickers", JSON.stringify(this.tickers));
-    },
-
     subscribeOnTickerInformation(tickerName) {
       setInterval(async () => {
         let data = await getDataByName(tickerName);
         this.tickers.find(t => t.name === tickerName).price = data.USD > 1 ? data.USD.toFixed(2) : data.USD.toPrecision(2);
-        if (this.sel?.name === tickerName) {
+        if (this.selectedTicker?.name === tickerName) {
           this.graph.push(data.USD);
         }
       }, 10000);
@@ -248,11 +246,11 @@ export default {
 
   computed: {
     startIndex() {
-      return (this.pageNumber - 1) * 6;
+      return (this.page - 1) * 6;
     },
 
     endIndex() {
-      return this.pageNumber * 6;
+      return this.page * 6;
     },
 
     filteredTickers() {
@@ -265,6 +263,13 @@ export default {
 
     hasNextPage() {
       return this.filteredTickers.length > this.endIndex;
+    },
+
+    pageStateOptions() {
+      return {
+        filter: this.filter,
+        page: this.page
+      }
     },
 
     normalizedGraph() {
@@ -283,26 +288,42 @@ export default {
   },
 
   watch: {
+    tickers() {
+      localStorage.setItem("tickers", JSON.stringify(this.tickers));
+    },
+
+    pageStateOptions(value) {
+      history.pushState(null, document.title, `${window.location.pathname}?filter=${value.filter}&page${value.page}`);
+    },
+
+    selectedTicker() {
+      this.graph = [];
+    },
+
     filter() {
-      this.pageNumber = 1;
-      history.pushState(null, document.title, `${window.location.pathname}?filter=${this.filter}&page${this.pageNumber}`);
+      this.page = 1;
     },
 
     page() {
-      history.pushState(null, document.title, `${window.location.pathname}?filter=${this.filter}&page${this.pageNumber}`);
+      history.pushState(null, document.title, `${window.location.pathname}?filter=${this.filter}&page${this.page}`);
+    },
+
+    paginatedTickers() {
+      if (this.paginatedTickers.length === 0 && this.page > 1) {
+        this.page--;
+      }
     }
   },
 
   created() {
     const windowData = Object.fromEntries(new URL(window.location).searchParams.entries());
+    const validKeys = ["filter", "page"];
 
-    if (windowData.filter) {
-      this.filter = windowData.filter;
-    }
-
-    if (windowData.page) {
-      this.pageNumber = windowData.page;
-    }
+    validKeys.forEach(key => {
+      if (windowData[key]) {
+        this[key] = windowData[key];
+      }
+    })
 
     this.fetchCoinsList();
     let tickersInLocalStorage = JSON.parse(localStorage.getItem("tickers"));
@@ -311,18 +332,15 @@ export default {
       this.tickers = tickersInLocalStorage;
       tickersInLocalStorage.forEach(t => this.subscribeOnTickerInformation(t.name));
     }
-  }
+  },
 };
 </script>
 
 <!--TODO:-->
-<!--1. Одинаковый код в watch-->
 <!--2. При удалении остается подписка на загрузку тикер-->
 <!--3. Количество запросов-->
 <!--4. Запросы напрямую внутри компонентов (??)-->
 <!--5. Обработка ошибок АПИ-->
-<!--6. Наличие в состоянии зависимых данных-->
-<!--7. График ужасно выглядит если будет много цен-->
-<!--8. При удалении тикера не изменяется локалсторадж (я вроде бы фиксил уже)-->
+
 <!--9. ЛокалСторадж в анонимных вкладках (Может быть не доступен)-->
 <!--10. Магические строки и числа (URL, секунды задержки, ключ локал стораджа, количество на странице)-->
