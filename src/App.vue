@@ -95,7 +95,7 @@
                 {{ t.name }} - USD
               </dt>
               <dd class="mt-1 text-3xl font-semibold text-gray-900">
-                {{ t.price }}
+                {{ formatPrice(t.price) }}
               </dd>
             </div>
             <div class="w-full border-t border-gray-200"></div>
@@ -165,7 +165,7 @@
 </template>
 
 <script>
-import {getDataByName, getCoinsList} from "./api";
+import {getCoinsList, subscribeToTicker, unsubscribeFromTicker} from "./api";
 
 export default {
   name: "App",
@@ -196,18 +196,21 @@ export default {
       }
 
       this.tickers = [...this.tickers, currentTicker];
-      this.subscribeOnTickerInformation(currentTicker.name);
+      subscribeToTicker(currentTicker.name, newPrice => this.updateTicker(currentTicker.name, newPrice));
       this.ticker = "";
       this.coinsListToShow = [];
     },
+
     removeTicker(ticker) {
       this.tickers = this.tickers.filter(t => t !== ticker);
+      unsubscribeFromTicker(ticker.name);
 
       if (ticker === this.selectedTicker) {
         this.selectedTicker = null;
       }
 
     },
+
     select(ticker) {
       this.selectedTicker = ticker;
     },
@@ -216,6 +219,7 @@ export default {
       this.ticker = coin.Symbol;
       this.addTicker();
     },
+
     onChangeTicker() {
       this.coinsListToShow = [];
       this.isTickerIn = false;
@@ -226,14 +230,18 @@ export default {
       });
     },
 
-    subscribeOnTickerInformation(tickerName) {
-      setInterval(async () => {
-        let data = await getDataByName(tickerName);
-        this.tickers.find(t => t.name === tickerName).price = data.USD > 1 ? data.USD.toFixed(2) : data.USD.toPrecision(2);
-        if (this.selectedTicker?.name === tickerName) {
-          this.graph.push(data.USD);
-        }
-      }, 10000);
+    formatPrice(price) {
+      if (price === '-') {
+        return price;
+      }
+
+      return price > 1 ? price.toFixed(2) : price.toPrecision(2);
+    },
+
+    updateTicker(tickerName, price) {
+      this.tickers.filter(t => t.name === tickerName).forEach(t => {
+        t.price = price;
+      });
     },
 
     async fetchCoinsList() {
@@ -326,12 +334,17 @@ export default {
     })
 
     this.fetchCoinsList();
-    let tickersInLocalStorage = JSON.parse(localStorage.getItem("tickers"));
+    const tickersInLocalStorage = localStorage.getItem("tickers");
 
     if (tickersInLocalStorage) {
-      this.tickers = tickersInLocalStorage;
-      tickersInLocalStorage.forEach(t => this.subscribeOnTickerInformation(t.name));
+      this.tickers = JSON.parse(tickersInLocalStorage);
+      this.tickers.forEach(t => {
+        subscribeToTicker(t.name, newPrice => this.updateTicker(t.name, newPrice));
+      })
     }
+
+    setInterval(this.updateTicker, 6000);
+
   },
 };
 </script>
