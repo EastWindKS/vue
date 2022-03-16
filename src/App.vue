@@ -85,6 +85,7 @@
               v-for="(t,index) in paginatedTickers"
               :key="index"
               :class="{
+                'bg-red-500 overflow-hidden shadow rounded-lg border-purple-800 border-solid cursor-pointer': t.isError,
                 'border-4': selectedTicker === t
               }"
               @click="select(t)"
@@ -172,6 +173,7 @@ export default {
   data() {
     return {
       ticker: "",
+      BTCUSD: 0,
       filter: "",
       page: 1,
       isTickerIn: false,
@@ -180,14 +182,15 @@ export default {
       selectedTicker: null,
       graph: [],
       coinsList: [],
-      coinsListToShow: []
+      coinsListToShow: [],
     };
   },
   methods: {
     async addTicker() {
       const currentTicker = {
         name: this.ticker.toUpperCase(),
-        price: "-"
+        price: "-",
+        isError: false
       };
 
       if (this.tickers.find(t => t.name === currentTicker.name)) {
@@ -196,14 +199,16 @@ export default {
       }
 
       this.tickers = [...this.tickers, currentTicker];
-      subscribeToTicker(currentTicker.name, newPrice => this.updateTicker(currentTicker.name, newPrice));
+      subscribeToTicker(currentTicker.name, "USD",
+          (newPrice, currency) => this.updateTicker(currentTicker.name, newPrice, currency), () => this.onError(currentTicker.name));
+
       this.ticker = "";
       this.coinsListToShow = [];
     },
 
     removeTicker(ticker) {
       this.tickers = this.tickers.filter(t => t !== ticker);
-      unsubscribeFromTicker(ticker.name);
+      unsubscribeFromTicker(ticker.name, "USD");
 
       if (ticker === this.selectedTicker) {
         this.selectedTicker = null;
@@ -238,13 +243,31 @@ export default {
       return price > 1 ? price.toFixed(2) : price.toPrecision(2);
     },
 
-    updateTicker(tickerName, price) {
+    updateTicker(tickerName, price, crossCurrency) {
+      if (tickerName === "BTCUSD") {
+        this.BTCUSD = price;
+      }
+
       this.tickers.filter(t => t.name === tickerName).forEach(t => {
-        t.price = price;
+
+        if (crossCurrency === "BTC") {
+          t.price = price * this.BTCUSD
+          t.prevPrice = price;
+        } else {
+          t.price = price;
+        }
+
+        t.crossCurrency = crossCurrency;
 
         if (t === this.selectedTicker) {
           this.graph.push(t.price);
         }
+      });
+    },
+
+    onError(tickerName) {
+      this.tickers.filter(t => t.name === tickerName).forEach(t => {
+        t.isError = true;
       });
     },
 
@@ -257,6 +280,7 @@ export default {
   },
 
   computed: {
+
     startIndex() {
       return (this.page - 1) * 6;
     },
@@ -304,6 +328,14 @@ export default {
       localStorage.setItem("tickers", JSON.stringify(this.tickers));
     },
 
+    BTCUSD() {
+      this.tickers.forEach(t => {
+        if (t.crossCurrency && t.prevPrice) {
+          t.price = t.prevPrice * this.BTCUSD;
+        }
+      })
+    },
+
     pageStateOptions(value) {
       history.pushState(null, document.title, `${window.location.pathname}?filter=${value.filter}&page${value.page}`);
     },
@@ -343,21 +375,13 @@ export default {
     if (tickersInLocalStorage) {
       this.tickers = JSON.parse(tickersInLocalStorage);
       this.tickers.forEach(t => {
-        subscribeToTicker(t.name, newPrice => this.updateTicker(t.name, newPrice));
+        subscribeToTicker(t.name, "USD", (newPrice, currency) => this.updateTicker(t.name, newPrice, currency), () => this.onError(t.name));
       })
     }
 
+    subscribeToTicker("BTC", "USD", (newPrice, currency) => this.updateTicker("BTCUSD", newPrice, currency));
     setInterval(this.updateTicker, 6000);
 
   },
 };
 </script>
-
-<!--TODO:-->
-<!--2. При удалении остается подписка на загрузку тикер-->
-<!--3. Количество запросов-->
-<!--4. Запросы напрямую внутри компонентов (??)-->
-<!--5. Обработка ошибок АПИ-->
-
-<!--9. ЛокалСторадж в анонимных вкладках (Может быть не доступен)-->
-<!--10. Магические строки и числа (URL, секунды задержки, ключ локал стораджа, количество на странице)-->
