@@ -129,11 +129,13 @@
         <h3 class="text-lg leading-6 font-medium text-gray-900 my-8">
           {{ selectedTicker.name }} - USD
         </h3>
-        <div class="flex items-end border-gray-600 border-b border-l h-64">
+        <div
+            ref="graph"
+            class="flex items-end border-gray-600 border-b border-l h-64">
           <div
               v-for="(g,index) in normalizedGraph"
               :key="index"
-              :style="{ height: `${g}%` }"
+              :style="{ height: `${g}%`}"
               class="bg-purple-800 border w-10 h-24"/>
         </div>
         <button
@@ -181,6 +183,7 @@ export default {
       tickers: [],
       selectedTicker: null,
       graph: [],
+      maxGraphElements: 1,
       coinsList: [],
       coinsListToShow: [],
     };
@@ -244,6 +247,7 @@ export default {
     },
 
     updateTicker(tickerName, price, crossCurrency) {
+
       if (tickerName === "BTCUSD") {
         this.BTCUSD = price;
       }
@@ -261,6 +265,10 @@ export default {
 
         if (t === this.selectedTicker) {
           this.graph.push(t.price);
+
+          if (this.graph.length > this.maxGraphElements) {
+            this.graph = this.graph.slice(this.graph.length - this.maxGraphElements)
+          }
         }
       });
     },
@@ -269,6 +277,15 @@ export default {
       this.tickers.filter(t => t.name === tickerName).forEach(t => {
         t.isError = true;
       });
+    },
+
+    calculateMaxGraphElements() {
+      if (!this.$refs.graph) {
+        return;
+      }
+
+      this.maxGraphElements = this.$refs.graph.clientWidth / 38;
+
     },
 
     async fetchCoinsList() {
@@ -342,6 +359,7 @@ export default {
 
     selectedTicker() {
       this.graph = [];
+      this.$nextTick().then(this.calculateMaxGraphElements);
     },
 
     filter() {
@@ -357,6 +375,15 @@ export default {
         this.page--;
       }
     }
+  },
+
+  mounted() {
+    this.calculateMaxGraphElements();
+    window.addEventListener("resize", this.calculateMaxGraphElements);
+  },
+
+  beforeUnmount() {
+    window.removeEventListener("resize", this.calculateMaxGraphElements);
   },
 
   created() {

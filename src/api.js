@@ -20,6 +20,11 @@ webSocket.addEventListener("message", e => {
             subscribeToTickerOnWs(ticker, "BTC");
             return;
         } else {
+
+            if (ticker === currency) {
+                return;
+            }
+
             const errorsHandlers = tickersErrorsHandlers.get(ticker) ?? [];
 
             errorsHandlers.forEach(fn => {
